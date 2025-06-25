@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Multimodal RAG</title>
+    <style>
+        body {
+            font-family: sans-serif;
+            max-width: 800px;
+            margin: auto;
+            padding: 20px;
+        }
+
+        .container {
+            border: 1px solid #ccc;
+            padding: 20px;
+            margin-bottom: 20px;
+            border-radius: 8px;
+        }
+
+        #chatbox {
+            height: 300px;
+            border: 1px solid #ddd;
+            overflow-y: scroll;
+            padding: 10px;
+            margin-bottom: 10px;
+        }
+
+        .user-msg {
+            text-align: right;
+            color: blue;
+        }
+
+        .ai-msg {
+            text-align: left;
+            color: green;
+        }
+
+        input,
+        button {
+            padding: 10px;
+            width: calc(100% - 22px);
+            margin-bottom: 10px;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>Multimodal RAG Web App</h1>
+
+    <div class="container">
+        <h2>1. Add a Data Source</h2>
+        <form id="youtubeForm">
+            <input type="text" id="youtubeUrl" placeholder="Enter YouTube URL" required />
+            <button type="submit" id="youtubeBtn">Process YouTube Video</button>
+        </form>
+        <hr />
+        <form id="pdfForm">
+            <input type="file" id="pdfFile" accept=".pdf" required />
+            <button type="submit" id="pdfBtn">Process PDF</button>
+        </form>
+        <p id="processStatus"></p>
+    </div>
+
+    <div class="container">
+        <h2>2. Chat with your Data</h2>
+        <div id="chatbox"></div>
+        <form id="chatForm">
+            <input type="text" id="chatInput" placeholder="Ask a question..." required />
+            <button type="submit" id="chatBtn">Send</button>
+        </form>
+    </div>
+
+    <script>
+        const threadId = 'session_' + Math.random().toString(36).substr(2, 9);
+        const chatbox = document.getElementById('chatbox');
+        const processStatus = document.getElementById('processStatus');
+
+        // YouTube submission
+        document.getElementById('youtubeForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const url = document.getElementById('youtubeUrl').value;
+            const btn = document.getElementById('youtubeBtn');
+            const formData = new FormData();
+            formData.append('url', url);
+
+            btn.disabled = true;
+            processStatus.innerText = 'Processing YouTube video...';
+
+            try {
+                const response = await fetch('/process-youtube/', {
+                    method: 'POST',
+                    body: formData,
+                });
+                const result = await response.json();
+                processStatus.innerText = result.message;
+            } catch (error) {
+                processStatus.innerText = 'Failed to process YouTube video.';
+            } finally {
+                btn.disabled = false;
+            }
+        });
+
+        // PDF submission
+        document.getElementById('pdfForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const fileInput = document.getElementById('pdfFile');
+            const btn = document.getElementById('pdfBtn');
+            const formData = new FormData();
+            formData.append('file', fileInput.files[0]);
+
+            btn.disabled = true;
+            processStatus.innerText = 'Processing PDF...';
+
+            try {
+                const response = await fetch('/process-pdf/', {
+                    method: 'POST',
+                    body: formData,
+                });
+                const result = await response.json();
+                processStatus.innerText = result.message;
+                fileInput.value = ''; // Reset input
+            } catch (error) {
+                processStatus.innerText = 'Failed to process PDF.';
+            } finally {
+                btn.disabled = false;
+            }
+        });
+
+        // Chat form
+        document.getElementById('chatForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const input = document.getElementById('chatInput');
+            const message = input.value;
+            const btn = document.getElementById('chatBtn');
+            input.value = '';
+            btn.disabled = true;
+
+            addMessage(message, 'user-msg');
+
+            try {
+                const response = await fetch('/chat/', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ thread_id: threadId, message: message }),
+                });
+                const result = await response.json();
+                addMessage(result.response, 'ai-msg');
+            } catch (error) {
+                addMessage('Error getting response. Please try again.', 'ai-msg');
+            } finally {
+                btn.disabled = false;
+            }
+        });
+
+        function addMessage(text, className) {
+            const p = document.createElement('p');
+            p.className = className;
+            p.innerText = text;
+            chatbox.appendChild(p);
+            chatbox.scrollTop = chatbox.scrollHeight;
+        }
+    </script>
+</body>
+
+</html>

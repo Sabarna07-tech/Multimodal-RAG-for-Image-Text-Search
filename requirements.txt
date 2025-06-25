@@ -1,0 +1,15 @@
+yt-dlp
+youtube-transcript-api
+opencv-python
+PyMuPDF
+sentence-transformers
+Pillow
+torch
+chromadb
+google-generativeai
+langgraph
+langgraph-checkpoint-sqlite
+fastapi
+uvicorn[standard]
+python-multipart 
+python-dotenv
