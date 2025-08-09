@@ -27,7 +27,6 @@ from retrieval.retriever import Retriever
 from generation.generator import Generator
 
 # --- Global App Components ---
-# We define them here but initialize the graph within the lifespan
 app_graph = None
 embedder = Embedder()
 store = ChromaStore(db_path="output/web_chroma_db")
@@ -40,7 +39,6 @@ generator = Generator()
 async def lifespan(app: FastAPI):
     """Manages the checkpointer's lifecycle."""
     global app_graph
-    # The checkpointer needs to be used as a context manager
     with SqliteSaver.from_conn_string(":memory:") as memory:
         # Define the Graph State
         class AgentState(TypedDict):
@@ -67,7 +65,6 @@ async def lifespan(app: FastAPI):
         workflow.add_edge("retrieve", "generate")
         workflow.add_edge("generate", END)
         
-        # Compile the graph with the active checkpointer
         app_graph = workflow.compile(checkpointer=memory)
         print("Application startup complete. Graph is compiled with active checkpointer.")
         yield
@@ -107,20 +104,25 @@ def process_youtube_video(url: str, store: ChromaStore, embedder: Embedder):
 def process_pdf_file(file_path: str, store: ChromaStore, embedder: Embedder):
     """Helper function to process a PDF file and add to the vector store."""
     print(f"\n--- Processing PDF: {file_path} ---")
-    all_text, all_image_paths = extract_pdf_data(file_path)
-    
-    if all_text:
-        text_chunks = [item['text'] for item in all_text]
-        metadatas = [{'source': file_path, 'page': item['page']} for item in all_text]
-        ids = [str(uuid.uuid4()) for _ in text_chunks]
-        text_embeddings = embedder.embed_text(text_chunks)
-        store.text_collection.add(embeddings=text_embeddings.tolist(), documents=text_chunks, metadatas=metadatas, ids=ids)
+    try:
+        all_text, all_image_paths = extract_pdf_data(file_path)
+        
+        if all_text:
+            text_chunks = [item['text'] for item in all_text]
+            metadatas = [{'source': file_path, 'page': item['page']} for item in all_text]
+            ids = [str(uuid.uuid4()) for _ in text_chunks]
+            text_embeddings = embedder.embed_text(text_chunks)
+            store.text_collection.add(embeddings=text_embeddings.tolist(), documents=text_chunks, metadatas=metadatas, ids=ids)
 
-    if all_image_paths:
-        image_metadatas = [{'image_path': path, 'source': file_path} for path in all_image_paths]
-        image_ids = [str(uuid.uuid4()) for _ in all_image_paths]
-        image_embeddings = embedder.embed_images(all_image_paths)
-        store.image_collection.add(embeddings=image_embeddings.tolist(), documents=all_image_paths, metadatas=image_metadatas, ids=image_ids)
+        if all_image_paths:
+            image_metadatas = [{'image_path': path, 'source': file_path} for path in all_image_paths]
+            image_ids = [str(uuid.uuid4()) for _ in all_image_paths]
+            image_embeddings = embedder.embed_images(all_image_paths)
+            store.image_collection.add(embeddings=image_embeddings.tolist(), documents=all_image_paths, metadatas=image_metadatas, ids=image_ids)
+        return True, "PDF processed successfully."
+    except Exception as e:
+        print(f"ERROR in PDF processing: {e}")
+        return False, str(e)
 
 # --- API Data Models ---
 class ChatRequest(BaseModel):
@@ -142,10 +144,13 @@ async def process_pdf_endpoint(file: UploadFile = File(...)):
     with open(file_path, "wb") as buffer:
         buffer.write(await file.read())
     
-    process_pdf_file(file_path, store, embedder)
+    success, message = process_pdf_file(file_path, store, embedder)
     
     os.remove(file_path)
-    return {"status": "success", "message": f"PDF processed: {file.filename}"}
+    
+    if not success:
+        raise HTTPException(status_code=400, detail=f"Failed to process PDF: {message}")
+    return {"status": "success", "message": message}
 
 
 @app.post("/chat/")

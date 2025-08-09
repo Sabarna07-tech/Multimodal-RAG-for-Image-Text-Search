@@ -3,7 +3,7 @@
 from sentence_transformers import SentenceTransformer
 from PIL import Image
 import torch
-
+import os
 class Embedder:
     """
     A class to handle the embedding of text and images using pre-trained models.
