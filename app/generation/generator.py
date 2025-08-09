@@ -1,27 +1,25 @@
 # multimodal_rag/generation/generator.py
 
 import os
-import sys
 import google.generativeai as genai
 from PIL import Image
-from dotenv import load_dotenv
-load_dotenv()
-# Add the parent directory to the system path to allow imports
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 class Generator:
     """
     Handles the final answer generation using a multimodal LLM (Gemini).
     """
-    def __init__(self):
+    def __init__(self, api_key: str):
         """
         Initializes the Generator by configuring the Gemini API.
+
+        Args:
+            api_key (str): The Google API key for Gemini.
         """
+        if not api_key:
+            raise ValueError("A valid Google API key must be provided.")
+
         try:
-            # Configure the API key from environment variables
-            api_key = os.getenv("GOOGLE_API_KEY")
-            if not api_key:
-                raise ValueError("GOOGLE_API_KEY environment variable not set.")
+            # Configure the API key
             genai.configure(api_key=api_key)
             
             # Initialize the multimodal model
