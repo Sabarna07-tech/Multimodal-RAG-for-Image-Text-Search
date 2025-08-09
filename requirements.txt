@@ -4,7 +4,6 @@ opencv-python
 PyMuPDF
 sentence-transformers
 Pillow
-torch
 chromadb
 google-generativeai
 langgraph
@@ -13,3 +12,6 @@ fastapi
 uvicorn[standard]
 python-multipart 
 python-dotenv
+pydantic-settings
+pytest
+httpx
