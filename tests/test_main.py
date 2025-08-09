@@ -1,6 +1,7 @@
 import os
 import json
 from fastapi.testclient import TestClient
+from unittest.mock import MagicMock
 
 # --- Test Setup ---
 
@@ -11,8 +12,6 @@ TEST_API_KEYS = {
 }
 
 # Set environment variables for the test session.
-# This MUST be done BEFORE the application is imported to ensure Pydantic
-# loads the correct settings for testing.
 os.environ["GOOGLE_API_KEY"] = "dummy-test-api-key"
 os.environ["API_KEYS"] = json.dumps(TEST_API_KEYS)
 
@@ -33,22 +32,25 @@ def test_read_main_root():
     assert response.status_code == 200
 
 
-def test_api_key_authentication():
+def test_api_key_authentication(mocker):
     """
-    Tests that the API key authentication middleware is working correctly.
-    - A valid key should be accepted.
-    - An invalid key should be rejected with a 403 Forbidden error.
-    - A missing key should be rejected with a 403 Forbidden error.
+    Tests that the API key authentication is working correctly.
     """
+    # Mock the external call to the Gemini API
+    mock_response = MagicMock()
+    mock_response.text = "This is a mocked response."
+    mocker.patch("app.main.generator.model.generate_content", return_value=mock_response)
+
     chat_payload = {"thread_id": "test-thread", "message": "hello"}
 
-    # Test with a valid API key from our test set
+    # Test with a valid API key
     response_valid = client.post(
         "/chat/",
         headers={"X-API-Key": "test-key-user-1"},
         json=chat_payload
     )
     assert response_valid.status_code == 200
+    assert response_valid.json() == {"response": "This is a mocked response."}
 
     # Test with an invalid API key
     response_invalid = client.post(
@@ -64,34 +66,26 @@ def test_api_key_authentication():
     assert response_no_key.status_code == 403
 
 
-def test_multi_tenancy_data_isolation_placeholder():
+def test_multi_tenancy_data_isolation_placeholder(mocker):
     """
-    This test serves as a structural placeholder for verifying multi-tenancy.
-
-    A complete version of this test would be more complex, requiring mocking of
-    the YouTube/PDF data extractors and the AI generation model to avoid
-    real network calls.
-
-    The test would:
-    1. Mock `extract_youtube_data`.
-    2. Have User 1 ingest data about "Topic A".
-    3. Have User 2 ingest data about "Topic B".
-    4. Verify (by checking the context passed to the generator) that a chat
-       from User 1 only uses "Topic A" data and a chat from User 2 only
-       uses "Topic B" data.
-
-    For now, this simplified test confirms that the endpoints can be reached
-    by different authenticated users, which is a prerequisite for multi-tenancy.
+    Tests that different users can access the chat endpoint, with the
+    external API mocked.
     """
+    # Mock the external call to the Gemini API
+    mock_response = MagicMock()
+    mock_response.text = "This is another mocked response."
+    mocker.patch("app.main.generator.model.generate_content", return_value=mock_response)
+
     user1_key = "test-key-user-1"
     user2_key = "test-key-user-2"
 
-    # Confirm both users can access the chat endpoint with their respective keys.
-    # This implies the backend is correctly identifying them.
+    # Confirm both users can access the chat endpoint and get a valid (mocked) response.
     chat_payload_1 = {"thread_id": "user1-thread", "message": "test 1"}
     response_user1 = client.post("/chat/", headers={"X-API-Key": user1_key}, json=chat_payload_1)
     assert response_user1.status_code == 200
+    assert response_user1.json() == {"response": "This is another mocked response."}
 
     chat_payload_2 = {"thread_id": "user2-thread", "message": "test 2"}
     response_user2 = client.post("/chat/", headers={"X-API-Key": user2_key}, json=chat_payload_2)
     assert response_user2.status_code == 200
+    assert response_user2.json() == {"response": "This is another mocked response."}
