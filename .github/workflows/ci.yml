@@ -1,0 +1,36 @@
+name: Run Tests
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.12'
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        # First, install the CPU-only version of torch to save space
+        pip install torch --index-url https://download.pytorch.org/whl/cpu
+        # Then, install the rest of the requirements
+        pip install -r requirements.txt
+
+    - name: Run tests
+      run: |
+        pytest
+      env:
+        # The tests are designed to run with a dummy key, so we provide one here.
+        # This prevents the pydantic settings validation from failing.
+        GOOGLE_API_KEY: "ci-dummy-key"
