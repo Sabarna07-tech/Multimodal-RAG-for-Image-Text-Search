@@ -51,6 +51,12 @@
     <h1>Multimodal RAG Web App</h1>
 
     <div class="container">
+        <h2>API Key</h2>
+        <input type="text" id="apiKey" placeholder="Enter your API key..." value="test-key" />
+        <p><em>For this demo, you can use the default 'test-key'.</em></p>
+    </div>
+
+    <div class="container">
         <h2>1. Add a Data Source</h2>
         <form id="youtubeForm">
             <input type="text" id="youtubeUrl" placeholder="Enter YouTube URL" required />
@@ -78,6 +84,21 @@
         const chatbox = document.getElementById('chatbox');
         const processStatus = document.getElementById('processStatus');
 
+        const getHeaders = () => {
+            const apiKey = document.getElementById('apiKey').value;
+            return {
+                'X-API-Key': apiKey
+            };
+        };
+
+        const getJSONHeaders = () => {
+            const apiKey = document.getElementById('apiKey').value;
+            return {
+                'Content-Type': 'application/json',
+                'X-API-Key': apiKey
+            };
+        };
+
         // YouTube submission
         document.getElementById('youtubeForm').addEventListener('submit', async (e) => {
             e.preventDefault();
@@ -92,12 +113,17 @@
             try {
                 const response = await fetch('/process-youtube/', {
                     method: 'POST',
+                    headers: getHeaders(),
                     body: formData,
                 });
+                if (!response.ok) {
+                    const err = await response.json();
+                    throw new Error(err.detail || 'Processing failed');
+                }
                 const result = await response.json();
                 processStatus.innerText = result.message;
             } catch (error) {
-                processStatus.innerText = 'Failed to process YouTube video.';
+                processStatus.innerText = `Error: ${error.message}`;
             } finally {
                 btn.disabled = false;
             }
@@ -117,13 +143,18 @@
             try {
                 const response = await fetch('/process-pdf/', {
                     method: 'POST',
+                    headers: getHeaders(),
                     body: formData,
                 });
+                if (!response.ok) {
+                    const err = await response.json();
+                    throw new Error(err.detail || 'Processing failed');
+                }
                 const result = await response.json();
                 processStatus.innerText = result.message;
                 fileInput.value = ''; // Reset input
             } catch (error) {
-                processStatus.innerText = 'Failed to process PDF.';
+                processStatus.innerText = `Error: ${error.message}`;
             } finally {
                 btn.disabled = false;
             }
@@ -143,13 +174,17 @@
             try {
                 const response = await fetch('/chat/', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: getJSONHeaders(),
                     body: JSON.stringify({ thread_id: threadId, message: message }),
                 });
+                if (!response.ok) {
+                    const err = await response.json();
+                    throw new Error(err.detail || 'Chat failed');
+                }
                 const result = await response.json();
                 addMessage(result.response, 'ai-msg');
             } catch (error) {
-                addMessage('Error getting response. Please try again.', 'ai-msg');
+                addMessage(`Error: ${error.message}`, 'ai-msg');
             } finally {
                 btn.disabled = false;
             }

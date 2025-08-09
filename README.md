@@ -1,103 +1,115 @@
-# Multimodal RAG for Image-Text Search
+# Multimodal RAG SaaS Platform
 
 ## Overview
 
-This project implements a Retrieval-Augmented Generation (RAG) system that understands and processes both text and images to answer user queries. It can ingest data from various sources (e.g., YouTube videos, PDF files), extract relevant textual and visual information, and use that multimodal context to provide comprehensive answers.
+This project provides a scalable, multi-tenant Retrieval-Augmented Generation (RAG) system designed as a foundation for a Software as a Service (SaaS) platform. It understands and processes both text and images from various sources (YouTube videos, PDF files), allowing users to chat with their private data.
+
+The system is built with a modern Python stack, including FastAPI for the web framework, LangGraph for orchestrating AI logic, ChromaDB for vector storage, and Google's Gemini Pro Vision for multimodal generation.
 
 ---
 
 ## Architecture
 
-The system is built on a modular pipeline, orchestrated by a `StateGraph` (from the `langgraph` library) that manages the flow of data between stages.
+The system is designed with a multi-tenant architecture, where each user's data is isolated and secured via API key authentication.
 
 ```
-                           +-------------------+
-                           |   User Interface  |
-                           | (Web UI / Console)|
-                           +-------------------+
++---------------------+      +-------------------+      +----------------------+
+|   User 1 (Web UI)   |----->|   API Gateway     |----->|   RAG Pipeline       |
+| (API Key: key-1)    |      | (FastAPI)         |      | (User 1's Context)   |
++---------------------+      +-------------------+      +----------------------+
                                      |
-                                     v
-+-------------------+      +-------------------+
-|  Data Ingestion   |      |   User's Query    |
-|(PDFs, YouTube, etc)+------>-------------------+
-+-------------------+      |
-         |                 v
-         v       +---------------------+
-+-----------------+  |  Embedding (CLIP)   |
-|  Data Extraction|  +---------------------+
-| (Text & Images) |            |
-+-----------------+            v
-         |           +---------------------+
-         v           |      Retriever      |
-+-----------------+  +---------------------+
-| Embedding       |            |
-| (Text & Images) |<-----------+
-+-----------------+            |
-         |                     v
-         v       +--------------------------+
-+-----------------+  | Multimodal LLM (Gemini)  |
-| Vector Store    |  |  (Text + Image Context)  |
-| (ChromaDB)      |  +--------------------------+
-+-----------------+            |
-                               v
-                         +-----------------+
-                         | Generated       |
-                         | Answer          |
-                         +-----------------+
++---------------------+              |
+|   User 2 (Web UI)   |--------------+
+| (API Key: key-2)    |
++---------------------+
+
++--------------------------+   +---------------------------+
+| Vector Store (ChromaDB)  |   | Chat History (SQLite)     |
+| - user-1_text_collection |   | - user-1_checkpoints.db   |
+| - user-1_image_collection|   | - user-2_checkpoints.db   |
+| - user-2_text_collection |   +---------------------------+
+| - user-2_image_collection|
++--------------------------+
 ```
 
----
+### Core Features:
 
-## Core Components
-
-### 1. Data Ingestion & Extraction
-
-- **Sources**: Supports YouTube videos and PDF files.
-- **YouTube**: Downloads video, extracts transcript with timestamps, samples frames at intervals.
-- **PDF**: Extracts text and embedded images from each page.
-
-### 2. Embedding
-
-- **Purpose**: Converts both text and images into numerical vector representations (embeddings).
-- **Text**: Uses `all-MiniLM-L6-v2` from `sentence-transformers`.
-- **Image**: Uses `clip-ViT-B-32` (CLIP model) for semantic image embeddings.
-
-### 3. Vector Store
-
-- **Storage**: Uses `ChromaDB` to store embeddings.
-- **Separation**: Maintains two collections—one for text (`text_embeddings`), one for images (`image_embeddings`).
-
-### 4. Retrieval
-
-- **Query Handling**: Embeds user's query using the text embedding model.
-- **Search**: Finds semantically similar text and images in ChromaDB using the query embedding.
-
-### 5. Generation
-
-- **LLM**: Uses Google’s Gemini Pro Vision model (accepts both text and images).
-- **Prompt Construction**: Combines the original query, retrieved text, and images.
-- **Output**: Asks Gemini to generate a comprehensive answer utilizing all supplied information.
+- **Multi-Tenancy**: User data is isolated at both the vector store and chat history levels.
+- **API Key Authentication**: Simple and effective security to control access.
+- **Centralized Configuration**: Easy to manage settings for different environments.
+- **Persistent Chat History**: Conversations are saved per-user, per-thread.
+- **Modular and Scalable**: The project is structured to be easily extended with new features.
 
 ---
 
-## How Multimodality is Achieved
+## Getting Started
 
-1. **Dual Embedding Models**  
-   Uses distinct embedding models for text and images, ensuring each modality is properly represented.
+### 1. Prerequisites
 
-2. **CLIP for Cross-Modal Understanding**  
-   Employs CLIP to create an embedding space where images and their text descriptions are close together, enabling image search via text queries.
+- Python 3.9+
+- An environment variable manager (e.g., `direnv`) is recommended.
 
-3. **Separate Vector Collections**  
-   Text and images are stored in distinct collections, allowing efficient, independent searching per modality before combining results.
+### 2. Installation
 
-4. **Multimodal LLM for Synthesis**  
-   Gemini Pro Vision can reason over both text and image data, synthesizing answers that integrate information from both sources (e.g., analyzing a PDF chart and related text).
+Clone the repository and install the required dependencies:
+
+```bash
+git clone <repository-url>
+cd <repository-name>
+pip install -r requirements.txt
+```
+
+### 3. Configuration
+
+The application is configured using environment variables. Copy the example `.env` file and fill in your details.
+
+```bash
+cp .env.example .env
+```
+
+Now, edit the `.env` file:
+
+- **`GOOGLE_API_KEY`**: You must provide a valid Google API key for the Gemini model to work.
+- **`API_KEYS`**: This is a JSON string mapping API keys to user IDs. You can add your own keys. The default key is `test-key`.
+  ```
+  API_KEYS='{"test-key": "test-user", "my-secret-key": "user-alpha"}'
+  ```
+
+### 4. Running the Application
+
+Once your `.env` file is configured, you can run the FastAPI server:
+
+```bash
+python main.py
+```
+
+The server will start on `http://localhost:8000`.
+
+### 5. Using the Web Interface
+
+Navigate to `http://localhost:8000` in your browser.
+
+1.  **Enter Your API Key**: In the "API Key" section, enter one of the keys you defined in your `.env` file (e.g., `test-key`).
+2.  **Add Data**: Use the forms to process a YouTube video or upload a PDF. This data will be added to the vector store associated with your API key.
+3.  **Chat**: Ask questions about the data you've added. Your conversation will be saved and is unique to your user account.
 
 ---
 
-## Summary
+## Project Structure
 
-This RAG system demonstrates a robust approach to multimodal retrieval and generation, leveraging state-of-the-art models and an efficient, modular architecture. By combining specialized embedding models, a powerful vector database, and a multimodal LLM, it delivers answers that draw from the full spectrum of available data—text and images alike.
+The project is organized into a main `app` package for better modularity:
 
+- **`app/`**: The core application source code.
+  - **`core/`**: Centralized configuration (`config.py`).
+  - **`data_extraction/`**: Modules for extracting data from PDFs and YouTube.
+  - **`embedding/`**: The text and image embedding module.
+  - **`generation/`**: The Gemini generator module.
+  - **`retrieval/`**: The retriever module.
+  - **`vector_store/`**: The multi-tenant `ChromaStore` module.
+  - **`static/`**: The HTML/JS frontend.
+  - **`main.py`**: The FastAPI application logic.
+- **`main.py`**: The root script to run the server.
+- **`requirements.txt`**: Project dependencies.
+- **`.env.example`**: An example configuration file.
+- **`output/`**: Default directory for storing ChromaDB databases and chat histories. This directory is created automatically.
 ---
