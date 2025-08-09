@@ -73,7 +73,7 @@ if __name__ == '__main__':
     # 1. Initialize the components the retriever depends on
     print("--- Initializing dependencies for testing ---")
     embedder = Embedder()
-    store = ChromaStore(db_path="output/test_chroma_db") # Use a separate DB for testing
+    store = ChromaStore(db_path="output/test_chroma_db", user_id="demo-user")  # Use a separate DB for testing
 
     # 2. Add some dummy data to the store
     print("\n--- Adding dummy data to the test store ---")
