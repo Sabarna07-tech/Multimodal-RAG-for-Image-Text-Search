@@ -30,6 +30,7 @@ from app.embedding.embedder import Embedder
 from app.vector_store.chroma_store import ChromaStore
 from app.retrieval.retriever import Retriever
 from app.generation.generator import Generator
+from app.storage.note_store import NoteStore
 from app.utils.text_chunk import chunk_pages
 
 from app.celery_app import celery_app
@@ -81,6 +82,7 @@ def get_user_id(api_key: str = Security(api_key_header)) -> str:
 
 _embedder = Embedder()
 _generator = Generator(settings.GOOGLE_API_KEY)
+_note_store = NoteStore(settings.NOTES_DB_PATH)
 
 
 # Lazy Redis client with in-memory fallback for local dev/test
@@ -116,6 +118,7 @@ def _redis_client():
 # ---------------------------------------------------------------------------
 class ChatRequest(BaseModel):
     thread_id: Optional[str] = None
+    video_id: Optional[str] = None
     message: str
 
 
@@ -255,9 +258,30 @@ async def ingest_status(request: Request, job_id: str, user_id: str = Depends(ge
     return body
 
 
-# ---------------------------------------------------------------------------
-# Chat endpoint
-# ---------------------------------------------------------------------------
+@app.get("/videos/")
+@limiter.limit(f"{settings.RATE_LIMIT_PER_MIN}/minute")
+async def list_videos(request: Request, user_id: str = Depends(get_user_id)):
+    videos = _note_store.list_videos(user_id)
+    return {"videos": videos}
+
+@app.get("/videos/{video_id}/notes")
+@limiter.limit(f"{settings.RATE_LIMIT_PER_MIN}/minute")
+async def get_video_notes(request: Request, video_id: str, user_id: str = Depends(get_user_id)):
+    record = _note_store.get_video(user_id, video_id)
+    if not record:
+        raise HTTPException(status_code=404, detail="Video notes not found")
+    return record
+
+@app.get("/videos/{video_id}/quiz")
+@limiter.limit(f"{settings.RATE_LIMIT_PER_MIN}/minute")
+async def get_video_quiz(request: Request, video_id: str, user_id: str = Depends(get_user_id)):
+    record = _note_store.get_quiz(user_id, video_id)
+    if not record:
+        raise HTTPException(status_code=404, detail="Quiz not found")
+    return record
+
+
+
 @app.post("/chat/")
 @limiter.limit(f"{settings.RATE_LIMIT_PER_MIN}/minute")
 async def chat(request: Request, chat_req: ChatRequest, user_id: str = Depends(get_user_id)):
@@ -265,6 +289,7 @@ async def chat(request: Request, chat_req: ChatRequest, user_id: str = Depends(g
         raise HTTPException(status_code=400, detail="Message cannot be empty")
 
     store = _ensure_store(user_id)
+    filters = {"video_id": chat_req.video_id} if chat_req.video_id else None
     retriever = Retriever(_embedder, store.text_collection, store.image_collection)
 
     results = retriever.retrieve(
@@ -272,6 +297,7 @@ async def chat(request: Request, chat_req: ChatRequest, user_id: str = Depends(g
         n_results=settings.N_RESULTS,
         rerank=settings.RERANK,
         rerank_top_k=settings.RERANK_TOP_K,
+        where=filters,
     )
 
     answer = _generator.generate_answer(chat_req.message, results.get("text"), results.get("image"))

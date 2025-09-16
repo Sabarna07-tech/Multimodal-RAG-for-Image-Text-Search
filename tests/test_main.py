@@ -15,6 +15,7 @@ os.environ["API_KEYS"] = json.dumps({"test-key-user-1": "user-1"})
 os.environ["CHROMA_DB_PATH"] = os.path.join(TMP_DIR, "chroma")
 os.environ["CHECKPOINT_DIR"] = os.path.join(TMP_DIR, "checkpoints")
 os.environ["INGEST_CACHE_DIR"] = os.path.join(TMP_DIR, "cache")
+os.environ["NOTES_DB_PATH"] = os.path.join(TMP_DIR, "notes.db")
 
 from app import main as app_main  # noqa: E402
 
@@ -57,6 +58,7 @@ def client(monkeypatch):
     monkeypatch.setattr(app_main, "_embedder", DummyEmbedder())
     monkeypatch.setattr(app_main, "_generator", DummyGenerator())
     monkeypatch.setattr(app_main, "_redis_client", lambda: DummyRedis())
+    app_main._note_store = app_main.NoteStore(app_main.settings.NOTES_DB_PATH)
 
     def _fake_delay(user_id, url):
         return SimpleNamespace(id="job-123")
@@ -66,6 +68,22 @@ def client(monkeypatch):
 
     monkeypatch.setattr(app_main.ingest_youtube_task, "delay", _fake_delay)
     monkeypatch.setattr(app_main.celery_app, "AsyncResult", _fake_async_result)
+
+    # Seed a video record for note-related tests
+    app_main._note_store.upsert(
+        "user-1",
+        "vid-1",
+        {
+            "video_id": "vid-1",
+            "video_url": "https://youtu.be/demo",
+            "title": "Demo Lecture",
+            "duration": 1200,
+            "summary": "Summary",
+            "key_points": ["Point A", "Point B"],
+            "timeline": [{"timestamp": 0, "note": "Intro"}],
+            "quiz": [{"question": "Q1", "answer": "A1"}],
+        },
+    )
 
     return TestClient(app_main.app)
 
@@ -105,6 +123,22 @@ def test_process_pdf(client, monkeypatch):
     assert payload["text_chunks_indexed"] > 0
 
 
+def test_video_library_endpoints(client):
+    headers = {"X-API-Key": "test-key-user-1"}
+    listing = client.get("/videos/", headers=headers)
+    assert listing.status_code == 200
+    videos = listing.json()["videos"]
+    assert videos and videos[0]["video_id"] == "vid-1"
+
+    notes = client.get("/videos/vid-1/notes", headers=headers)
+    assert notes.status_code == 200
+    assert notes.json()["title"] == "Demo Lecture"
+
+    quiz = client.get("/videos/vid-1/quiz", headers=headers)
+    assert quiz.status_code == 200
+    assert quiz.json()["quiz"][0]["answer"] == "A1"
+
+
 def test_chat_returns_answer(client, monkeypatch):
     expected = {
         "text": {"documents": [["doc1"]], "metadatas": [[{"source": "pdf"}]]},
@@ -114,7 +148,7 @@ def test_chat_returns_answer(client, monkeypatch):
     response = client.post(
         "/chat/",
         headers={"X-API-Key": "test-key-user-1"},
-        json={"thread_id": "t1", "message": "hello"},
+        json={"thread_id": "t1", "message": "hello", "video_id": "vid-1"},
     )
     assert response.status_code == 200
     assert response.json()["response"].startswith("answer for")

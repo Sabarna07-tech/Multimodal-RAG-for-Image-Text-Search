@@ -3,7 +3,7 @@ import re
 import shutil
 import subprocess
 import tempfile
-from typing import List, Tuple, Optional
+from typing import Any, Dict, List, Tuple, Optional
 
 import cv2
 import yt_dlp
@@ -45,7 +45,7 @@ def _ffmpeg_available() -> bool:
     return shutil.which("ffmpeg") and shutil.which("ffprobe")
 
 
-def download_lightweight(url: str, out_dir: str) -> str:
+def download_lightweight(url: str, out_dir: str, download: bool) -> Tuple[Optional[str], Dict[str, any]]:
     os.makedirs(out_dir, exist_ok=True)
     ydl_opts = {
         "outtmpl": os.path.join(out_dir, "%(id)s.%(ext)s"),
@@ -54,23 +54,26 @@ def download_lightweight(url: str, out_dir: str) -> str:
         "no_warnings": True,
         "retries": settings.YT_RETRIES,
         "socket_timeout": 30,
+        "skip_download": not download,
     }
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-        info = ydl.extract_info(url, download=True)
-        video_path = ydl.prepare_filename(info)
-        if not video_path.lower().endswith(".mp4") and _ffmpeg_available():
-            mp4_path = os.path.splitext(video_path)[0] + ".mp4"
-            try:
-                subprocess.run(
-                    ["ffmpeg", "-y", "-i", video_path, "-c", "copy", mp4_path],
-                    check=True,
-                    stdout=subprocess.DEVNULL,
-                    stderr=subprocess.DEVNULL,
-                )
-                video_path = mp4_path
-            except Exception:
-                pass
-        return video_path
+        info = ydl.extract_info(url, download=download)
+        video_path: Optional[str] = None
+        if download:
+            video_path = ydl.prepare_filename(info)
+            if not video_path.lower().endswith(".mp4") and _ffmpeg_available():
+                mp4_path = os.path.splitext(video_path)[0] + ".mp4"
+                try:
+                    subprocess.run(
+                        ["ffmpeg", "-y", "-i", video_path, "-c", "copy", mp4_path],
+                        check=True,
+                        stdout=subprocess.DEVNULL,
+                        stderr=subprocess.DEVNULL,
+                    )
+                    video_path = mp4_path
+                except Exception:
+                    pass
+        return video_path, info
 
 
 def _duration_sec(video_path: str) -> Optional[float]:
@@ -123,7 +126,7 @@ def _persist_frame_paths(temp_paths: List[str], user_id: Optional[str], video_id
     return persisted
 
 
-def extract_youtube_data(url: str, user_id: Optional[str] = None) -> Tuple[Optional[str], List[dict], List[str]]:
+def extract_youtube_data(url: str, user_id: Optional[str] = None) -> Tuple[Optional[str], List[dict], List[str], Dict[str, Any]]:
     transcript = try_transcript(url)
     need_download = (not transcript) or (not settings.YT_LAZY_FRAMES)
     video_path: Optional[str] = None
@@ -131,8 +134,8 @@ def extract_youtube_data(url: str, user_id: Optional[str] = None) -> Tuple[Optio
     vid = _video_id(url)
 
     with tempfile.TemporaryDirectory(dir=YTCACHE) as tmp_dir:
-        if need_download:
-            video_path = download_lightweight(url, tmp_dir)
+        video_path, info = download_lightweight(url, tmp_dir, download=need_download)
+        if need_download and video_path:
             duration = _duration_sec(video_path) or 0
             if settings.YT_MAX_DURATION_MIN > 0 and duration / 60.0 > settings.YT_MAX_DURATION_MIN:
                 raise RuntimeError(f"Video too long ({duration/60:.1f} min)")
@@ -146,5 +149,10 @@ def extract_youtube_data(url: str, user_id: Optional[str] = None) -> Tuple[Optio
                     max_frames=settings.YT_MAX_FRAMES,
                 )
                 frame_paths = _persist_frame_paths(temp_frames, user_id, vid)
+        else:
+            info = info or {}
 
-    return video_path, transcript, frame_paths
+    info.setdefault("id", vid)
+    info.setdefault("webpage_url", url)
+
+    return video_path, transcript, frame_paths, info

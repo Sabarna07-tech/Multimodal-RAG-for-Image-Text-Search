@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 import numpy as np
 
@@ -59,29 +59,34 @@ class Retriever:
         n_results: int = 4,
         rerank: bool = True,
         rerank_top_k: int = 8,
+        where: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
-        # Text search
         text_embeddings = self.embedder.embed_text([query])
         text_results: Dict[str, Any] = {"documents": [[]], "metadatas": [[]], "ids": [[]]}
         if len(text_embeddings):
+            query_kwargs: Dict[str, Any] = {
+                "query_embeddings": [text_embeddings[0].tolist()],
+                "n_results": max(n_results, rerank_top_k if rerank else n_results),
+            }
+            if where:
+                query_kwargs["where"] = where
             try:
-                raw = self.text_collection.query(
-                    query_embeddings=[text_embeddings[0].tolist()],
-                    n_results=max(n_results, rerank_top_k if rerank else n_results),
-                )
+                raw = self.text_collection.query(**query_kwargs)
                 text_results = self._rerank(query, raw, n_results) if rerank else raw
             except Exception:
                 pass
 
-        # Image search
         image_embeddings = self.embedder.embed_text_for_images([query])
         image_results: Dict[str, Any] = {"documents": [[]], "metadatas": [[]], "ids": [[]]}
         if len(image_embeddings):
+            image_kwargs: Dict[str, Any] = {
+                "query_embeddings": [image_embeddings[0].tolist()],
+                "n_results": n_results,
+            }
+            if where:
+                image_kwargs["where"] = where
             try:
-                image_results = self.image_collection.query(
-                    query_embeddings=[image_embeddings[0].tolist()],
-                    n_results=n_results,
-                )
+                image_results = self.image_collection.query(**image_kwargs)
             except Exception:
                 pass
 

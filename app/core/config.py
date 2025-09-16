@@ -37,6 +37,11 @@ class Settings(BaseSettings):
     # Background worker
     REDIS_URL: str = "redis://localhost:6379/0"
 
+    # Notes/Quizzes
+    NOTES_DB_PATH: str = "output/notes.db"
+    NOTE_CONTEXT_CHARS: int = 4000
+    QUIZ_QUESTION_COUNT: int = 5
+
     # Ingestion cache/output (place generated files outside repo to avoid reload restarts)
     INGEST_CACHE_DIR: str = _default_cache_dir()
 

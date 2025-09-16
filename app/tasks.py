@@ -1,17 +1,21 @@
 import os
 import uuid
-from typing import Optional
 
 from app.celery_app import celery_app
 from app.core.config import settings
 from app.core.redis_client import get_redis
 from app.data_extraction.youtube_extractor import extract_youtube_data, _video_id
 from app.embedding.embedder import Embedder
-from app.vector_store.chroma_store import ChromaStore
+from app.generation.generator import Generator
+from app.storage.note_store import NoteStore
+from app.utils.note_builder import build_notes_payload
 from app.utils.text_chunk import chunk_text
+from app.vector_store.chroma_store import ChromaStore
 
 _embedder = Embedder()  # worker-local (avoid GPU init on web)
+_generator = Generator(settings.GOOGLE_API_KEY) if settings.GOOGLE_API_KEY else None
 redis = get_redis()
+note_store = NoteStore(settings.NOTES_DB_PATH)
 
 
 def _already_indexed_key(user_id: str, vid: str) -> str:
@@ -24,13 +28,20 @@ def ingest_youtube_task(self, user_id: str, url: str):
     self.update_state(state="STARTED", meta={"stage": "begin", "video_id": vid})
 
     if vid != "unknown" and redis.get(_already_indexed_key(user_id, vid)):
-        return {"status": "ok", "skipped": True, "text_chunks_indexed": 0, "images_indexed": 0}
+        record = note_store.get_video(user_id, vid)
+        return {
+            "status": "ok",
+            "skipped": True,
+            "text_chunks_indexed": 0,
+            "images_indexed": 0,
+            "notes": record or {},
+        }
 
     try:
         store = ChromaStore(db_path=settings.CHROMA_DB_PATH, user_id=user_id)
 
         self.update_state(state="PROGRESS", meta={"stage": "extract"})
-        _, transcript, frame_paths = extract_youtube_data(url, user_id=user_id)
+        _, transcript, frame_paths, info = extract_youtube_data(url, user_id=user_id)
 
         full_text = " ".join([item.get("text", "") for item in transcript]) if transcript else ""
         chunks = chunk_text(full_text, settings.CHUNK_SIZE_CHARS, settings.CHUNK_OVERLAP_CHARS)
@@ -78,6 +89,9 @@ def ingest_youtube_task(self, user_id: str, url: str):
             )
             images_indexed = len(frame_paths)
 
+        notes_payload = build_notes_payload(transcript, info, vid, info.get("webpage_url", url), _generator)
+        note_store.upsert(user_id, vid, notes_payload)
+
         if vid != "unknown":
             redis.setex(_already_indexed_key(user_id, vid), 86400, "1")
 
@@ -85,6 +99,7 @@ def ingest_youtube_task(self, user_id: str, url: str):
             "status": "ok",
             "text_chunks_indexed": text_chunks_indexed,
             "images_indexed": images_indexed,
+            "notes": notes_payload,
         }
 
     except Exception as exc:
