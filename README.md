@@ -1,103 +1,112 @@
-# Multimodal RAG for Image-Text Search
+# Multimodal RAG SaaS Platform
 
 ## Overview
 
-This project implements a Retrieval-Augmented Generation (RAG) system that understands and processes both text and images to answer user queries. It can ingest data from various sources (e.g., YouTube videos, PDF files), extract relevant textual and visual information, and use that multimodal context to provide comprehensive answers.
+This project is a production-ready, multi-tenant Retrieval-Augmented Generation (RAG) platform. It lets each tenant ingest private data (PDFs and YouTube videos) and chat with the resulting knowledge base using Google's Gemini Pro Vision model. The stack centers on FastAPI, Celery, Redis, and ChromaDB with a lightweight HTML frontend for demos.
+
+Key capabilities:
+
+- **Tenant isolation** – every API key maps to its own text/image collections in ChromaDB.
+- **Multimodal ingestion** – PDFs are chunked and embedded; YouTube transcripts/frames are processed asynchronously.
+- **Cited answers** – chat responses return the retrieved metadata for transparency.
+- **Operational hardening** – rate limiting, request logging, idempotent background jobs, configurable storage paths.
 
 ---
 
-## Architecture
+## Setup
 
-The system is built on a modular pipeline, orchestrated by a `StateGraph` (from the `langgraph` library) that manages the flow of data between stages.
+### Requirements
 
-```
-                           +-------------------+
-                           |   User Interface  |
-                           | (Web UI / Console)|
-                           +-------------------+
-                                     |
-                                     v
-+-------------------+      +-------------------+
-|  Data Ingestion   |      |   User's Query    |
-|(PDFs, YouTube, etc)+------>-------------------+
-+-------------------+      |
-         |                 v
-         v       +---------------------+
-+-----------------+  |  Embedding (CLIP)   |
-|  Data Extraction|  +---------------------+
-| (Text & Images) |            |
-+-----------------+            v
-         |           +---------------------+
-         v           |      Retriever      |
-+-----------------+  +---------------------+
-| Embedding       |            |
-| (Text & Images) |<-----------+
-+-----------------+            |
-         |                     v
-         v       +--------------------------+
-+-----------------+  | Multimodal LLM (Gemini)  |
-| Vector Store    |  |  (Text + Image Context)  |
-| (ChromaDB)      |  +--------------------------+
-+-----------------+            |
-                               v
-                         +-----------------+
-                         | Generated       |
-                         | Answer          |
-                         +-----------------+
+- Python 3.9+
+- Redis (for task queue + rate limiting cache)
+- Google Gemini API key
+
+Install dependencies:
+
+```bash
+pip install -r requirements.txt
 ```
 
----
+Copy the example environment file and edit the values:
 
-## Core Components
+```bash
+cp .env.example .env
+```
 
-### 1. Data Ingestion & Extraction
+Important variables:
 
-- **Sources**: Supports YouTube videos and PDF files.
-- **YouTube**: Downloads video, extracts transcript with timestamps, samples frames at intervals.
-- **PDF**: Extracts text and embedded images from each page.
+- `GOOGLE_API_KEY` – Gemini API access.
+- `API_KEYS` – JSON object mapping client API keys to tenant identifiers.
+- `REDIS_URL` – Redis connection string (defaults to `redis://localhost:6379/0`).
+- `CHROMA_DB_PATH`, `CHECKPOINT_DIR`, `INGEST_CACHE_DIR` – override storage paths if desired.
 
-### 2. Embedding
+### Running the stack
 
-- **Purpose**: Converts both text and images into numerical vector representations (embeddings).
-- **Text**: Uses `all-MiniLM-L6-v2` from `sentence-transformers`.
-- **Image**: Uses `clip-ViT-B-32` (CLIP model) for semantic image embeddings.
+Start Redis (via Docker or your package manager), then run the FastAPI app:
 
-### 3. Vector Store
+```bash
+python main.py
+```
 
-- **Storage**: Uses `ChromaDB` to store embeddings.
-- **Separation**: Maintains two collections—one for text (`text_embeddings`), one for images (`image_embeddings`).
+In a separate shell, start the Celery worker for YouTube ingestion:
 
-### 4. Retrieval
+```bash
+celery -A app.tasks worker --loglevel=info
+```
 
-- **Query Handling**: Embeds user's query using the text embedding model.
-- **Search**: Finds semantically similar text and images in ChromaDB using the query embedding.
-
-### 5. Generation
-
-- **LLM**: Uses Google’s Gemini Pro Vision model (accepts both text and images).
-- **Prompt Construction**: Combines the original query, retrieved text, and images.
-- **Output**: Asks Gemini to generate a comprehensive answer utilizing all supplied information.
+The demo UI is served at http://localhost:8000. Supply one of the API keys configured in `.env`, upload PDFs, enqueue YouTube URLs, and chat with the indexed content.
 
 ---
 
-## How Multimodality is Achieved
+## Application Components
 
-1. **Dual Embedding Models**  
-   Uses distinct embedding models for text and images, ensuring each modality is properly represented.
+```
++---------+      +--------------+      +--------------------+
+|  User   | ---> |  FastAPI API | ---> |  Retrieval + LLM   |
++---------+      +--------------+      +--------------------+
+      |                |                         |
+      |                |                         +--> Gemini Pro Vision
+      |                +--> Celery + Redis jobs
+      |                +--> ChromaDB (tenant text/image collections)
+      +--> Static HTML/JS client
+```
 
-2. **CLIP for Cross-Modal Understanding**  
-   Employs CLIP to create an embedding space where images and their text descriptions are close together, enabling image search via text queries.
-
-3. **Separate Vector Collections**  
-   Text and images are stored in distinct collections, allowing efficient, independent searching per modality before combining results.
-
-4. **Multimodal LLM for Synthesis**  
-   Gemini Pro Vision can reason over both text and image data, synthesizing answers that integrate information from both sources (e.g., analyzing a PDF chart and related text).
+- **FastAPI (`app/main.py`)** – authentication, rate limiting, ingestion endpoints, chat API, and static assets.
+- **Celery worker (`app/tasks.py`)** – downloads YouTube content, embeds transcript/frames, and writes to the correct tenant collections.
+- **Embeddings (`app/embedding/embedder.py`)** – SentenceTransformer + CLIP models for text/image encoding.
+- **Retriever (`app/retrieval/retriever.py`)** – dense search with optional reranking via CrossEncoder.
+- **Generator (`app/generation/generator.py`)** – wraps Gemini, assembles prompts with citations, and returns answers.
+- **Vector storage (`app/vector_store/chroma_store.py`)** – persistent ChromaDB client with per-tenant collections.
 
 ---
 
-## Summary
+## API Reference (excerpt)
 
-This RAG system demonstrates a robust approach to multimodal retrieval and generation, leveraging state-of-the-art models and an efficient, modular architecture. By combining specialized embedding models, a powerful vector database, and a multimodal LLM, it delivers answers that draw from the full spectrum of available data—text and images alike.
+| Endpoint | Method | Description |
+| --- | --- | --- |
+| `/healthz` | GET | Liveness probe. |
+| `/process-pdf/` | POST | Upload PDF (multipart). Immediately indexes text/images. |
+| `/process-youtube/` | POST | Form body with `url`. Enqueues background ingestion job (202 Accepted with job id). |
+| `/ingest/status/{job_id}` | GET | Poll Celery job status. |
+| `/chat/` | POST | JSON `{"thread_id": str, "message": str}`. Returns answer + citations. |
+
+All endpoints require `X-API-Key` header using a key defined in `API_KEYS`.
 
 ---
+
+## Testing
+
+Unit tests use FastAPI's TestClient with extensive mocking to avoid heavy model downloads. Install pytest (not part of runtime deps) and run:
+
+```bash
+pip install pytest
+python -m pytest
+```
+
+---
+
+## Development Notes
+
+- The application falls back to an in-memory cache if Redis is unreachable during local dev, but production deployments should run Redis.
+- YouTube ingestion persists sampled frames under `INGEST_CACHE_DIR/frames/<user>/<video_id>` so embeddings remain valid after temporary directories are cleaned up.
+- The HTML demo polls ingestion status and surfaces citation metadata with each chat response. Integrations can call the same REST API directly.

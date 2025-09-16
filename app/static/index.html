@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Multimodal RAG</title>
+    <style>
+        body {
+            font-family: sans-serif;
+            max-width: 900px;
+            margin: auto;
+            padding: 24px;
+        }
+        .container {
+            border: 1px solid #ccc;
+            padding: 20px;
+            margin-bottom: 20px;
+            border-radius: 8px;
+        }
+        #chatbox {
+            height: 320px;
+            border: 1px solid #ddd;
+            overflow-y: auto;
+            padding: 12px;
+            margin-bottom: 12px;
+            background: #fafafa;
+        }
+        .user-msg {
+            text-align: right;
+            color: #1f5ed0;
+        }
+        .ai-msg {
+            text-align: left;
+            color: #1a7f37;
+        }
+        input, button {
+            padding: 10px;
+            width: calc(100% - 22px);
+            margin-bottom: 10px;
+        }
+        code {
+            background: #f0f0f0;
+            padding: 2px 4px;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Multimodal RAG Web App</h1>
+
+    <div class="container">
+        <h2>API Key</h2>
+        <input type="text" id="apiKey" placeholder="Enter your API key..." value="test-key" />
+        <p><em>Provide one of the keys configured in your <code>.env</code>.</em></p>
+    </div>
+
+    <div class="container">
+        <h2>1. Add a Data Source</h2>
+        <form id="youtubeForm">
+            <input type="text" id="youtubeUrl" placeholder="Enter YouTube URL" required />
+            <button type="submit" id="youtubeBtn">Enqueue YouTube Video</button>
+        </form>
+        <hr />
+        <form id="pdfForm">
+            <input type="file" id="pdfFile" accept=".pdf" required />
+            <button type="submit" id="pdfBtn">Process PDF</button>
+        </form>
+        <p id="processStatus"></p>
+    </div>
+
+    <div class="container">
+        <h2>2. Chat with your Data</h2>
+        <div id="chatbox"></div>
+        <form id="chatForm">
+            <input type="text" id="chatInput" placeholder="Ask a question..." required />
+            <button type="submit" id="chatBtn">Send</button>
+        </form>
+    </div>
+
+    <script>
+        const threadId = 'session_' + Math.random().toString(36).substr(2, 9);
+        const chatbox = document.getElementById('chatbox');
+        const processStatus = document.getElementById('processStatus');
+
+        const getKeyHeaders = (withJson = false) => {
+            const headers = { 'X-API-Key': document.getElementById('apiKey').value };
+            if (withJson) headers['Content-Type'] = 'application/json';
+            return headers;
+        };
+
+        async function pollIngest(jobId) {
+            processStatus.innerText = `Job ${jobId} queued...`;
+            let done = false;
+            while (!done) {
+                await new Promise(r => setTimeout(r, 2000));
+                const res = await fetch(`/ingest/status/${jobId}`, { headers: getKeyHeaders() });
+                if (!res.ok) {
+                    processStatus.innerText = `Failed to fetch status (${res.status})`;
+                    return;
+                }
+                const data = await res.json();
+                processStatus.innerText = `Job ${data.job_id}: ${data.state}`;
+                if (data.state === 'SUCCESS' || data.state === 'FAILURE') {
+                    done = true;
+                    if (data.state === 'SUCCESS') {
+                        processStatus.innerText = `Job ${data.job_id} finished. Indexed ${data.text_chunks_indexed || 0} text chunks and ${data.images_indexed || 0} images.`;
+                    } else {
+                        processStatus.innerText = `Job ${data.job_id} failed: ${data.error || data.result || 'unknown error'}`;
+                    }
+                }
+            }
+        }
+
+        document.getElementById('youtubeForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const url = document.getElementById('youtubeUrl').value;
+            const btn = document.getElementById('youtubeBtn');
+            const formData = new FormData();
+            formData.append('url', url);
+
+            btn.disabled = true;
+            processStatus.innerText = 'Enqueuing YouTube ingestion...';
+
+            try {
+                const response = await fetch('/process-youtube/', {
+                    method: 'POST',
+                    headers: getKeyHeaders(),
+                    body: formData,
+                });
+                const result = await response.json();
+                if (!response.ok) {
+                    throw new Error(result.detail || 'Ingestion failed');
+                }
+                processStatus.innerText = `Job ${result.job_id} accepted. Tracking...`;
+                await pollIngest(result.job_id);
+            } catch (error) {
+                processStatus.innerText = `Error: ${error.message}`;
+            } finally {
+                btn.disabled = false;
+            }
+        });
+
+        document.getElementById('pdfForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const fileInput = document.getElementById('pdfFile');
+            const btn = document.getElementById('pdfBtn');
+            const formData = new FormData();
+            formData.append('file', fileInput.files[0]);
+
+            btn.disabled = true;
+            processStatus.innerText = 'Processing PDF...';
+
+            try {
+                const response = await fetch('/process-pdf/', {
+                    method: 'POST',
+                    headers: getKeyHeaders(),
+                    body: formData,
+                });
+                const result = await response.json();
+                if (!response.ok) {
+                    throw new Error(result.detail || 'Processing failed');
+                }
+                processStatus.innerText = `Indexed ${result.text_chunks_indexed} text chunks and ${result.images_indexed} images.`;
+                fileInput.value = '';
+            } catch (error) {
+                processStatus.innerText = `Error: ${error.message}`;
+            } finally {
+                btn.disabled = false;
+            }
+        });
+
+        document.getElementById('chatForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const input = document.getElementById('chatInput');
+            const message = input.value;
+            const btn = document.getElementById('chatBtn');
+
+            input.value = '';
+            btn.disabled = true;
+
+            addMessage(message, 'user-msg');
+
+            try {
+                const response = await fetch('/chat/', {
+                    method: 'POST',
+                    headers: getKeyHeaders(true),
+                    body: JSON.stringify({ thread_id: threadId, message }),
+                });
+                const result = await response.json();
+                if (!response.ok) {
+                    throw new Error(result.detail || 'Chat failed');
+                }
+                addMessage(formatAssistantMessage(result), 'ai-msg');
+            } catch (error) {
+                addMessage(`Error: ${error.message}`, 'ai-msg');
+            } finally {
+                btn.disabled = false;
+            }
+        });
+
+        function addMessage(text, className) {
+            const wrapper = document.createElement('div');
+            wrapper.className = className;
+            wrapper.innerHTML = text;
+            chatbox.appendChild(wrapper);
+            chatbox.scrollTop = chatbox.scrollHeight;
+        }
+
+        function formatAssistantMessage(result) {
+            const citations = [];
+            if (result.citations) {
+                if (result.citations.text && result.citations.text.length) {
+                    citations.push(`<div><strong>Text sources:</strong> ${result.citations.text.map(c => c.source || c.file_name || 'unknown').join(', ')}</div>`);
+                }
+                if (result.citations.images && result.citations.images.length) {
+                    citations.push(`<div><strong>Image sources:</strong> ${result.citations.images.map(c => c.source || 'unknown').join(', ')}</div>`);
+                }
+            }
+            if (!citations.length) {
+                return result.response;
+            }
+            return `${result.response}<br/><small>${citations.join('<br/>')}</small>`;
+        }
+    </script>
+</body>
+</html>
