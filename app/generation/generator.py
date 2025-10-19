@@ -6,18 +6,20 @@ from typing import Any, Dict, List, Optional
 import google.generativeai as genai
 from PIL import Image
 
+from app.settings import settings
 
 class Generator:
     """Wrapper around Gemini for generating answers with text + image context."""
 
-    def __init__(self, api_key: str, model_name: str = "gemini-pro-vision") -> None:
+    def __init__(self, api_key: str, model_name: Optional[str] = None) -> None:
         if not api_key:
             raise ValueError("A valid Google API key must be provided.")
 
-        self.model_name = model_name
+        self.model_name = model_name or settings.gemini.model
         try:
             genai.configure(api_key=api_key)
-            self.model = genai.GenerativeModel(model_name)
+            # [MIGRATE] Upgrade to Gemini Vision Pro for multimodal responses.
+            self.model = genai.GenerativeModel(self.model_name)
         except Exception as exc:  # pragma: no cover - depends on external service
             # Surface a helpful error at call time rather than import time.
             print(f"Error initializing Gemini model: {exc}")

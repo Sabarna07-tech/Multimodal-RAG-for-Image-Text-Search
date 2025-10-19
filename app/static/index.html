@@ -1,367 +1,428 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
+  <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Multimodal RAG Study Desk</title>
+    <title>Multimodal RAG Demo Console</title>
     <style>
+      :root {
+        color-scheme: dark light;
+        font-family: "Segoe UI", system-ui, sans-serif;
+      }
+      body {
+        margin: 0;
+        padding: 24px;
+        background: radial-gradient(circle at top, #1e293b, #0f172a 55%);
+        color: #e2e8f0;
+        min-height: 100vh;
+      }
+      h1,
+      h2,
+      h3 {
+        color: #38bdf8;
+        margin: 0 0 16px;
+      }
+      h2 {
+        font-size: 1.35rem;
+      }
+      a {
+        color: #38bdf8;
+      }
+      .container {
+        max-width: 1100px;
+        margin: 0 auto;
+        display: grid;
+        gap: 24px;
+      }
+      section {
+        background: rgba(15, 23, 42, 0.7);
+        border: 1px solid rgba(148, 163, 184, 0.14);
+        border-radius: 18px;
+        padding: 26px;
+        box-shadow: 0 24px 60px -20px rgba(56, 189, 248, 0.4);
+        backdrop-filter: blur(18px);
+      }
+      label {
+        display: block;
+        margin-bottom: 8px;
+        font-weight: 600;
+        letter-spacing: 0.02em;
+      }
+      input,
+      textarea,
+      button {
+        width: 100%;
+        border-radius: 12px;
+        border: 1px solid rgba(148, 163, 184, 0.25);
+        padding: 12px 14px;
+        margin-bottom: 14px;
+        background: rgba(15, 23, 42, 0.6);
+        color: #e2e8f0;
+        transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+        font-size: 1rem;
+      }
+      textarea {
+        min-height: 120px;
+        resize: vertical;
+      }
+      button {
+        cursor: pointer;
+        background: linear-gradient(135deg, #0ea5e9, #22d3ee);
+        border: none;
+        font-weight: 600;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        box-shadow: 0 18px 35px -18px rgba(34, 211, 238, 0.8);
+      }
+      button:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 22px 45px -18px rgba(34, 211, 238, 0.9);
+      }
+      button:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+        transform: none;
+      }
+      input:focus,
+      textarea:focus {
+        outline: none;
+        border-color: #38bdf8;
+        box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.25);
+      }
+      .status {
+        margin-top: 12px;
+        padding: 12px;
+        border-radius: 12px;
+        font-size: 0.92rem;
+        line-height: 1.45;
+        background: rgba(15, 23, 42, 0.5);
+        border-left: 4px solid transparent;
+        display: none;
+      }
+      .status.success {
+        border-color: #22c55e;
+      }
+      .status.error {
+        border-color: #ef4444;
+      }
+      .status.info {
+        border-color: #38bdf8;
+      }
+      .grid-two {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+        gap: 24px;
+      }
+      .jobs-list,
+      .responses {
+        display: grid;
+        gap: 16px;
+      }
+      .card {
+        background: rgba(15, 23, 42, 0.6);
+        border: 1px solid rgba(148, 163, 184, 0.15);
+        border-radius: 14px;
+        padding: 18px;
+      }
+      .badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 0.78rem;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        padding: 4px 10px;
+        border-radius: 999px;
+        background: rgba(56, 189, 248, 0.2);
+        border: 1px solid rgba(56, 189, 248, 0.35);
+        margin-bottom: 10px;
+      }
+      pre {
+        background: rgba(15, 23, 42, 0.6);
+        border-radius: 12px;
+        padding: 12px;
+        overflow-x: auto;
+        border: 1px solid rgba(148, 163, 184, 0.1);
+      }
+      details summary {
+        cursor: pointer;
+        font-weight: 600;
+        margin-bottom: 6px;
+      }
+      details[open] summary {
+        color: #38bdf8;
+      }
+      @media (max-width: 640px) {
         body {
-            font-family: sans-serif;
-            max-width: 960px;
-            margin: auto;
-            padding: 24px;
-            background: #f7f9fc;
+          padding: 16px;
         }
-        h1 {
-            margin-bottom: 8px;
+        section {
+          padding: 20px;
         }
-        .section {
-            background: #fff;
-            border: 1px solid #d8dee9;
-            border-radius: 10px;
-            margin-bottom: 20px;
-            padding: 20px;
-            box-shadow: 0 2px 4px rgba(15, 23, 42, 0.04);
-        }
-        label {
-            font-weight: 600;
-        }
-        input, button, select, textarea {
-            width: 100%;
-            padding: 10px;
-            margin-top: 8px;
-            margin-bottom: 12px;
-            border: 1px solid #cbd5f5;
-            border-radius: 6px;
-        }
-        button {
-            background: #2563eb;
-            color: #fff;
-            cursor: pointer;
-        }
-        button:disabled {
-            background: #94a3b8;
-            cursor: wait;
-        }
-        #chatbox {
-            height: 340px;
-            overflow-y: auto;
-            padding: 12px;
-            background: #f1f5f9;
-            border-radius: 8px;
-            border: 1px solid #d8dee9;
-        }
-        .msg {
-            padding: 8px 12px;
-            border-radius: 8px;
-            margin-bottom: 8px;
-            line-height: 1.5;
-        }
-        .msg.user {
-            background: #dbeafe;
-            text-align: right;
-        }
-        .msg.ai {
-            background: #dcfce7;
-        }
-        .notes {
-            background: #f8fafc;
-            border: 1px solid #dde3f5;
-            border-radius: 8px;
-            padding: 12px;
-        }
-        .notes h3 {
-            margin-top: 0;
-        }
-        ul {
-            padding-left: 20px;
-        }
-        small {
-            color: #475569;
-        }
+      }
     </style>
-</head>
-<body>
-    <h1>Learning Companion</h1>
-    <p>Ingest YouTube lectures, read AI-generated notes, and chat with the content to reinforce your learning.</p>
+  </head>
+  <body>
+    <div class="container">
+      <section>
+        <h1>Multimodal RAG Console</h1>
+        <p>Upload PDFs, ingest YouTube transcripts + scene frames, poll job progress, and chat with grounded answers (Gemini Vision Pro).</p>
+        <label for="apiKey">API Key</label>
+        <input id="apiKey" type="text" placeholder="X-API-Key from your .env" />
+        <button id="saveKey">Save API Key</button>
+        <div id="authStatus" class="status info"></div>
+      </section>
 
-    <div class="section">
-        <h2>API Key</h2>
-        <label for="apiKey">X-API-Key</label>
-        <input type="text" id="apiKey" placeholder="Enter your API key" value="test-key" />
-        <small>Use an API key defined in your <code>.env</code>.</small>
-    </div>
+      <div class="grid-two">
+        <section>
+          <h2>Upload PDF</h2>
+          <form id="pdfForm">
+            <label for="pdfInput">Select PDF</label>
+            <input id="pdfInput" type="file" accept="application/pdf" />
+            <button type="submit">Process PDF</button>
+          </form>
+          <div id="pdfStatus" class="status info"></div>
+        </section>
 
-    <div class="section">
-        <h2>1. Add Study Material</h2>
-        <form id="youtubeForm">
+        <section>
+          <h2>Ingest YouTube</h2>
+          <form id="youtubeForm">
             <label for="youtubeUrl">YouTube URL</label>
-            <input type="text" id="youtubeUrl" placeholder="https://youtube.com/watch?v=..." required />
-            <button type="submit" id="youtubeBtn">Enqueue YouTube Video</button>
-        </form>
-        <hr />
-        <form id="pdfForm">
-            <label for="pdfFile">PDF Upload</label>
-            <input type="file" id="pdfFile" accept=".pdf" />
-            <button type="submit" id="pdfBtn">Process PDF</button>
-        </form>
-        <p id="processStatus"></p>
-    </div>
+            <input id="youtubeUrl" type="url" placeholder="https://youtu.be/..." />
+            <button type="submit">Enqueue Ingestion</button>
+          </form>
+          <div id="youtubeStatus" class="status info"></div>
+          <div class="jobs-list" id="jobsList"></div>
+        </section>
+      </div>
 
-    <div class="section">
-        <h2>2. Video Library</h2>
-        <label for="videoSelect">Your videos</label>
-        <select id="videoSelect">
-            <option value="">-- Select a processed video --</option>
-        </select>
-        <div id="notesPanel" class="notes" hidden>
-            <h3 id="notesTitle"></h3>
-            <p id="notesSummary"></p>
-            <h4>Key Points</h4>
-            <ul id="notesKeyPoints"></ul>
-            <h4>Timeline Highlights</h4>
-            <ul id="notesTimeline"></ul>
-            <h4>Quiz Starters</h4>
-            <ul id="notesQuiz"></ul>
-        </div>
-    </div>
-
-    <div class="section">
-        <h2>3. Chat with Your Notes</h2>
-        <div id="chatbox"></div>
+      <section>
+        <h2>Chat</h2>
         <form id="chatForm">
-            <textarea id="chatInput" placeholder="Ask a question about the selected video" rows="3" required></textarea>
-            <button type="submit" id="chatBtn">Send</button>
+          <label for="chatMessage">Question</label>
+          <textarea id="chatMessage" placeholder="Ask something about your indexed content..."></textarea>
+
+          <label for="chatVideoId">Optional video ID</label>
+          <input id="chatVideoId" type="text" placeholder="Limit answer to a specific video (optional)" />
+
+          <button type="submit">Send</button>
         </form>
+        <div id="chatStatus" class="status info"></div>
+        <div class="responses" id="responses"></div>
+      </section>
     </div>
 
     <script>
-        const threadId = 'session_' + Math.random().toString(36).substr(2, 9);
-        let currentVideoId = '';
-        const chatbox = document.getElementById('chatbox');
-        const processStatus = document.getElementById('processStatus');
-        const videoSelect = document.getElementById('videoSelect');
-        const notesPanel = document.getElementById('notesPanel');
-        const notesTitle = document.getElementById('notesTitle');
-        const notesSummary = document.getElementById('notesSummary');
-        const notesKeyPoints = document.getElementById('notesKeyPoints');
-        const notesTimeline = document.getElementById('notesTimeline');
-        const notesQuiz = document.getElementById('notesQuiz');
+      const apiKeyInput = document.getElementById("apiKey");
+      const saveKeyButton = document.getElementById("saveKey");
+      const authStatus = document.getElementById("authStatus");
+      const pdfForm = document.getElementById("pdfForm");
+      const pdfStatus = document.getElementById("pdfStatus");
+      const youtubeForm = document.getElementById("youtubeForm");
+      const youtubeStatus = document.getElementById("youtubeStatus");
+      const jobsList = document.getElementById("jobsList");
+      const chatForm = document.getElementById("chatForm");
+      const chatStatus = document.getElementById("chatStatus");
+      const responses = document.getElementById("responses");
 
-        const getHeaders = (json = false) => {
-            const headers = { 'X-API-Key': document.getElementById('apiKey').value };
-            if (json) headers['Content-Type'] = 'application/json';
-            return headers;
-        };
+      let apiKey = "";
+      const activeJobs = new Map();
 
-        async function refreshLibrary() {
-            try {
-                const response = await fetch('/videos/', { headers: getHeaders() });
-                if (!response.ok) throw new Error('Unable to load library');
-                const data = await response.json();
-                const selected = videoSelect.value;
-                videoSelect.innerHTML = '<option value="">-- Select a processed video --</option>';
-                (data.videos || []).forEach((item) => {
-                    const option = document.createElement('option');
-                    option.value = item.video_id;
-                    option.textContent = `${item.title || item.video_id}`;
-                    videoSelect.appendChild(option);
-                });
-                if (selected) {
-                    videoSelect.value = selected;
-                    if (videoSelect.value === selected) {
-                        currentVideoId = selected;
-                        await loadNotes(selected);
-                    }
-                }
-            } catch (error) {
-                console.error(error);
-            }
+      function showStatus(el, message, type = "info") {
+        el.textContent = message;
+        el.className = `status ${type}`;
+        el.style.display = "block";
+      }
+
+      function hideStatus(el) {
+        el.style.display = "none";
+      }
+
+      function requireKey() {
+        const key = apiKey.trim();
+        if (!key) throw new Error("API key required. Save your key first.");
+        return key;
+      }
+
+      function withApiKey(options = {}) {
+        const headers = Object.assign({}, options.headers, { "X-API-Key": requireKey() });
+        return { ...options, headers };
+      }
+
+      saveKeyButton.addEventListener("click", () => {
+        apiKey = apiKeyInput.value.trim();
+        if (!apiKey) {
+          showStatus(authStatus, "Please enter a valid API key.", "error");
+          return;
         }
+        localStorage.setItem("mrag-api-key", apiKey);
+        showStatus(authStatus, "API key saved for this session.", "success");
+      });
 
-        async function loadNotes(videoId) {
-            if (!videoId) {
-                notesPanel.hidden = true;
-                currentVideoId = '';
-                return;
-            }
-            try {
-                const response = await fetch(`/videos/${videoId}/notes`, { headers: getHeaders() });
-                if (!response.ok) throw new Error('Unable to load notes');
-                const data = await response.json();
-                notesTitle.textContent = data.title || 'Untitled video';
-                notesSummary.textContent = data.summary || 'No summary available yet.';
-                renderList(notesKeyPoints, data.key_points || []);
-                renderList(notesTimeline, (data.timeline || []).map((item) => `${item.timestamp}s — ${item.note}`));
-                renderList(notesQuiz, (data.quiz || []).map((item) => `${item.question} → ${item.answer}`));
-                notesPanel.hidden = false;
-                currentVideoId = videoId;
-            } catch (error) {
-                notesPanel.hidden = true;
-                processStatus.innerText = `Error: ${error.message}`;
-            }
+      (function restoreKey() {
+        const stored = localStorage.getItem("mrag-api-key");
+        if (stored) {
+          apiKey = stored;
+          apiKeyInput.value = stored;
+          showStatus(authStatus, "Loaded API key from previous session.", "success");
+        } else {
+          showStatus(authStatus, "Enter your API key to get started.", "info");
         }
+      })();
 
-        function renderList(node, items) {
-            node.innerHTML = '';
-            if (!items || !items.length) {
-                const li = document.createElement('li');
-                li.textContent = 'No data available yet.';
-                node.appendChild(li);
-                return;
-            }
-            items.forEach((item) => {
-                const li = document.createElement('li');
-                li.textContent = item;
-                node.appendChild(li);
-            });
+      pdfForm.addEventListener("submit", async (event) => {
+        event.preventDefault();
+        try {
+          requireKey();
+          const file = document.getElementById("pdfInput").files[0];
+          if (!file) throw new Error("Select a PDF file first.");
+
+          showStatus(pdfStatus, "Uploading PDF...", "info");
+
+          const formData = new FormData();
+          formData.append("file", file);
+
+          const response = await fetch("/process-pdf/", {
+            method: "POST",
+            headers: { "X-API-Key": apiKey },
+            body: formData,
+          });
+
+          if (!response.ok) {
+            const text = await response.text();
+            throw new Error(text || response.statusText);
+          }
+          const result = await response.json();
+          showStatus(
+            pdfStatus,
+            `PDF processed. Text chunks indexed: ${result.text_chunks_indexed}, images indexed: ${result.images_indexed}`,
+            "success"
+          );
+        } catch (error) {
+          showStatus(pdfStatus, `PDF upload failed: ${error.message}`, "error");
         }
+      });
 
-        async function pollIngest(jobId) {
-            processStatus.innerText = `Job ${jobId} queued...`;
-            let done = false;
-            while (!done) {
-                await new Promise(r => setTimeout(r, 2000));
-                const res = await fetch(`/ingest/status/${jobId}`, { headers: getHeaders() });
-                if (!res.ok) {
-                    processStatus.innerText = `Failed to fetch status (${res.status})`;
-                    return;
-                }
-                const data = await res.json();
-                processStatus.innerText = `Job ${data.job_id}: ${data.state}`;
-                if (data.state === 'SUCCESS' || data.state === 'FAILURE') {
-                    done = true;
-                    if (data.state === 'SUCCESS') {
-                        processStatus.innerText = `Job ${data.job_id} finished. Indexed ${data.text_chunks_indexed || 0} text chunks and ${data.images_indexed || 0} images.`;
-                        await refreshLibrary();
-                    } else {
-                        processStatus.innerText = `Job ${data.job_id} failed: ${data.error || data.result || 'unknown error'}`;
-                    }
-                }
-            }
+      youtubeForm.addEventListener("submit", async (event) => {
+        event.preventDefault();
+        try {
+          requireKey();
+          const url = document.getElementById("youtubeUrl").value.trim();
+          if (!url) throw new Error("Enter a valid YouTube URL.");
+
+          showStatus(youtubeStatus, "Submitting ingestion job...", "info");
+
+          const response = await fetch(
+            "/ingest/youtube",
+            withApiKey({
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ url }),
+            })
+          );
+
+          if (!response.ok) {
+            const text = await response.text();
+            throw new Error(text || response.statusText);
+          }
+
+          const result = await response.json();
+          showStatus(youtubeStatus, `Ingestion started. Job ID: ${result.job_id}`, "success");
+          trackJob(result.job_id);
+        } catch (error) {
+          showStatus(youtubeStatus, `Failed to enqueue video: ${error.message}`, "error");
         }
+      });
 
-        document.getElementById('youtubeForm').addEventListener('submit', async (e) => {
-            e.preventDefault();
-            const url = document.getElementById('youtubeUrl').value;
-            const btn = document.getElementById('youtubeBtn');
-            const formData = new FormData();
-            formData.append('url', url);
+      function trackJob(jobId) {
+        if (activeJobs.has(jobId)) return;
+        const card = document.createElement("div");
+        card.className = "card";
+        card.innerHTML = `
+          <div class="badge">Job ${jobId}</div>
+          <p>Status: <strong data-status>pending</strong></p>
+          <p>Progress: <strong data-progress>0%</strong></p>
+          <pre data-payload style="display:none;"></pre>
+        `;
+        jobsList.prepend(card);
+        const statusEl = card.querySelector("[data-status]");
+        const progressEl = card.querySelector("[data-progress]");
+        const payloadEl = card.querySelector("[data-payload]");
 
-            btn.disabled = true;
-            processStatus.innerText = 'Enqueuing YouTube ingestion...';
-
-            try {
-                const response = await fetch('/process-youtube/', {
-                    method: 'POST',
-                    headers: getHeaders(),
-                    body: formData,
-                });
-                const result = await response.json();
-                if (!response.ok) {
-                    throw new Error(result.detail || 'Ingestion failed');
-                }
-                processStatus.innerText = `Job ${result.job_id} accepted. Tracking...`;
-                await pollIngest(result.job_id);
-                document.getElementById('youtubeUrl').value = '';
-            } catch (error) {
-                processStatus.innerText = `Error: ${error.message}`;
-            } finally {
-                btn.disabled = false;
+        const interval = setInterval(async () => {
+          try {
+            const response = await fetch(`/yt_status/${jobId}`, withApiKey());
+            if (!response.ok) throw new Error(response.statusText);
+            const data = await response.json();
+            statusEl.textContent = data.state;
+            if (typeof data.progress_pct !== "undefined") {
+              progressEl.textContent = `${data.progress_pct}%`;
             }
-        });
-
-        document.getElementById('pdfForm').addEventListener('submit', async (e) => {
-            e.preventDefault();
-            const fileInput = document.getElementById('pdfFile');
-            if (!fileInput.files.length) {
-                processStatus.innerText = 'Select a PDF first.';
-                return;
+            if (data.state === "SUCCESS") {
+              payloadEl.style.display = "block";
+              payloadEl.textContent = JSON.stringify(data.notes || data, null, 2);
+              clearInterval(interval);
+            } else if (data.state === "FAILURE") {
+              payloadEl.style.display = "block";
+              payloadEl.textContent = JSON.stringify(data, null, 2);
+              card.classList.add("error");
+              clearInterval(interval);
             }
-            const btn = document.getElementById('pdfBtn');
-            const formData = new FormData();
-            formData.append('file', fileInput.files[0]);
+          } catch (error) {
+            statusEl.textContent = `Error: ${error.message}`;
+          }
+        }, 4000);
 
-            btn.disabled = true;
-            processStatus.innerText = 'Processing PDF...';
+        activeJobs.set(jobId, interval);
+      }
 
-            try {
-                const response = await fetch('/process-pdf/', {
-                    method: 'POST',
-                    headers: getHeaders(),
-                    body: formData,
-                });
-                const result = await response.json();
-                if (!response.ok) {
-                    throw new Error(result.detail || 'Processing failed');
-                }
-                processStatus.innerText = `Indexed ${result.text_chunks_indexed} text chunks and ${result.images_indexed} images.`;
-                fileInput.value = '';
-            } catch (error) {
-                processStatus.innerText = `Error: ${error.message}`;
-            } finally {
-                btn.disabled = false;
-            }
-        });
+      chatForm.addEventListener("submit", async (event) => {
+        event.preventDefault();
+        try {
+          requireKey();
+          const message = document.getElementById("chatMessage").value.trim();
+          const videoId = document.getElementById("chatVideoId").value.trim();
+          if (!message) throw new Error("Ask a question first.");
 
-        document.getElementById('chatForm').addEventListener('submit', async (e) => {
-            e.preventDefault();
-            const input = document.getElementById('chatInput');
-            const message = input.value.trim();
-            if (!message) {
-                return;
-            }
-            const btn = document.getElementById('chatBtn');
+          showStatus(chatStatus, "Querying Gemini Vision Pro...", "info");
 
-            input.value = '';
-            btn.disabled = true;
+          const payload = { message };
+          if (videoId) payload.video_id = videoId;
 
-            addMessage(message, 'user');
+          const response = await fetch(
+            "/chat_pro",
+            withApiKey({
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(payload),
+            })
+          );
 
-            try {
-                const response = await fetch('/chat/', {
-                    method: 'POST',
-                    headers: getHeaders(true),
-                    body: JSON.stringify({ thread_id: threadId, message, video_id: currentVideoId || null }),
-                });
-                const result = await response.json();
-                if (!response.ok) {
-                    throw new Error(result.detail || 'Chat failed');
-                }
-                addMessage(formatAssistantMessage(result), 'ai');
-            } catch (error) {
-                addMessage(`Error: ${error.message}`, 'ai');
-            } finally {
-                btn.disabled = false;
-            }
-        });
+          if (!response.ok) {
+            const text = await response.text();
+            throw new Error(text || response.statusText);
+          }
 
-        videoSelect.addEventListener('change', async (event) => {
-            await loadNotes(event.target.value);
-        });
+          const data = await response.json();
+          hideStatus(chatStatus);
 
-        function addMessage(text, role) {
-            const div = document.createElement('div');
-            div.className = `msg ${role}`;
-            div.innerHTML = text;
-            chatbox.appendChild(div);
-            chatbox.scrollTop = chatbox.scrollHeight;
+          const card = document.createElement("div");
+          card.className = "card";
+          card.innerHTML = `
+            <div class="badge">Gemini Vision Pro</div>
+            <h3>Answer</h3>
+            <p>${data.response.replace(/\n/g, "<br>")}</p>
+            <details>
+              <summary>Citations</summary>
+              <pre>${JSON.stringify(data.citations, null, 2)}</pre>
+            </details>
+          `;
+          responses.prepend(card);
+          chatForm.reset();
+        } catch (error) {
+          showStatus(chatStatus, `Chat request failed: ${error.message}`, "error");
         }
-
-        function formatAssistantMessage(result) {
-            const parts = [result.response || ''];
-            if (result.citations) {
-                const textSources = (result.citations.text || []).map((c) => c.source || c.file_name || 'text');
-                const imageSources = (result.citations.images || []).map((c) => c.source || 'image');
-                if (textSources.length) parts.push(`<small>Text: ${textSources.join(', ')}</small>`);
-                if (imageSources.length) parts.push(`<small>Images: ${imageSources.join(', ')}</small>`);
-            }
-            return parts.join('<br/>');
-        }
-
-        (async () => {
-            await refreshLibrary();
-        })();
+      });
     </script>
-</body>
+  </body>
 </html>

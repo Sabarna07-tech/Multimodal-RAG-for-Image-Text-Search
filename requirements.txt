@@ -4,7 +4,16 @@ opencv-python
 PyMuPDF
 sentence-transformers
 Pillow
-chromadb
+numpy
+llama-index
+llama-index-embeddings-huggingface
+llama-index-vector-stores-lancedb
+lancedb
+pyarrow
+imagehash
+transformers
+openai-whisper
+whisperx
 google-generativeai
 langgraph
 langgraph-checkpoint-sqlite

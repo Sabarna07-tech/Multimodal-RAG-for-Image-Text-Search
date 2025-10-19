@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from typing import Any, Dict, List, Optional
 
-from app.core.config import settings
+from app.settings import settings
 from app.generation.generator import Generator
 
 
@@ -58,8 +58,8 @@ def build_notes_payload(
     video_url: str,
     generator: Optional[Generator],
 ) -> Dict[str, Any]:
-    limited = _limit_transcript(transcript, settings.NOTE_CONTEXT_CHARS)
-    base = _fallback_notes(limited, settings.QUIZ_QUESTION_COUNT)
+    limited = _limit_transcript(transcript, settings.notes.context_chars)
+    base = _fallback_notes(limited, settings.notes.quiz_questions)
 
     if generator and getattr(generator, "model", None) and limited:
         context_lines = [f"[{seg['start']}s] {seg['text']}" for seg in limited]
@@ -67,7 +67,7 @@ def build_notes_payload(
             "You are creating study notes for a learner. Given the transcript excerpts below, "
             "produce JSON with fields: summary (string), key_points (list of 5 short bullet strings), "
             "timeline (list of objects with timestamp (int seconds) and note (string)), and quiz (list of "
-            f"{settings.QUIZ_QUESTION_COUNT} question objects with question and answer fields). If you cannot comply, "
+            f"{settings.notes.quiz_questions} question objects with question and answer fields). If you cannot comply, "
             "return an empty JSON object.\n\nTranscript:\n" + "\n".join(context_lines)
         )
         try:
